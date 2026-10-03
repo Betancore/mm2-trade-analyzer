@@ -26,7 +26,7 @@ export default function App() {
         return;
       }
       try {
-        const response = await fetch(`http://localhost:5000/api/items?query=${searchQuery}`);
+        const response = await fetch(`https://mm2-trade-analyzer.onrender.com/api/items?query=${searchQuery}`);
         const data = await response.json();
         setSearchResults(data);
       } catch (error) {
