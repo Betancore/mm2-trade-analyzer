@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
+const cron = require('node-cron');
 const db = require('./database'); // This initializes the DB
+const { runScraper } = require('./scraper');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -35,4 +37,12 @@ app.get('/api/items', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  
+  // Schedule the scraper to run automatically every hour
+  cron.schedule('0 * * * *', () => {
+    console.log('Running scheduled scraper...');
+    runScraper().catch(console.error);
+  });
+  
+  console.log('Scraper scheduled to run every hour at minute 0.');
 });
