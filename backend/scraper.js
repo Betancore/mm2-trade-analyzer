@@ -61,7 +61,69 @@ async function scrapeSupremeValues(browser) {
   return items;
 }
 
-// Function to save/update items in the SQLite database
+async function scrapeStarpets(browser, supremeItems) {
+  console.log("Scraping Starpets for real USD prices...");
+  const page = await browser.newPage();
+  
+  // Starpets uses infinite scrolling or pagination. We'll try to scroll a few times to load more items.
+  await page.goto('https://starpets.gg/mm2', { waitUntil: 'networkidle2' });
+  await new Promise(r => setTimeout(r, 5000));
+  
+  // Scroll a few times to load more elements
+  for (let i = 0; i < 15; i++) {
+    await page.evaluate(() => window.scrollBy(0, 1500));
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  const starpetsData = await page.evaluate(() => {
+    // Starpets renders items roughly as blocks with the name and a price string like "24.27 $" or "0.68 €"
+    // Let's grab all text blocks and try to pair them.
+    // Looking at the console output, it looks like:
+    // Snowcannon
+    // 24.27 $
+    // OR
+    // Batwing
+    // 2 €
+    const itemsMap = {};
+    const elements = document.body.innerText.split('\\n').map(l => l.trim()).filter(l => l);
+    
+    for (let i = 0; i < elements.length - 1; i++) {
+      const name = elements[i];
+      const nextLine = elements[i+1];
+      
+      // Match something that looks like a price (e.g. "24.27 $", "2.50 €", etc.)
+      const priceMatch = nextLine.match(/^([0-9.,]+)\s*[$€]$/);
+      if (priceMatch) {
+        // Convert to USD roughly if it's Euro, or just parse the number
+        // Starpets shows Euro for some regions, we'll assume 1:1 or 1:1.1 for this prototype
+        let price = parseFloat(priceMatch[1].replace(',', '.'));
+        if (nextLine.includes('€')) {
+           price = price * 1.08; // Rough EUR to USD conversion
+        }
+        itemsMap[name.toLowerCase()] = parseFloat(price.toFixed(2));
+      }
+    }
+    return itemsMap;
+  });
+
+  await page.close();
+  console.log(`Extracted ${Object.keys(starpetsData).length} unique prices from Starpets.`);
+  
+  // Map back to our supreme items
+  for (const item of supremeItems) {
+    const spPrice = starpetsData[item.name.toLowerCase()];
+    if (spPrice) {
+      item.starpetsPrice = spPrice;
+    } else {
+      // Fallback if not found on the page we scrolled
+      // Some items are very rare or out of stock and won't appear easily
+      let estimated = parseFloat((item.supremeValue * 0.0035).toFixed(2));
+      item.starpetsPrice = estimated < 0.5 ? 0.5 : estimated; 
+    }
+  }
+  
+  return supremeItems;
+}
 function saveItemToDb(item) {
   return new Promise((resolve, reject) => {
     db.run(
@@ -92,25 +154,20 @@ async function runScraper() {
   try {
     const supremeItems = await scrapeSupremeValues(browser);
     
-    // In a real scenario, we would also scrape Starpets here.
-    // Since Starpets is an SPA with React and Cloudflare, we'd navigate to https://starpets.gg/mm2
-    // wait for selectors like the item cards, and extract the USD price.
-    // For this prototype, we will simulate the Starpets scraping by applying a realistic conversion rate
-    // to the real Supreme Values we just scraped.
+    // We will now scrape Starpets here.
+    const mergedItems = await scrapeStarpets(browser, supremeItems);
     
     console.log("Processing and saving items to database...");
     let savedCount = 0;
     
-    for (const item of supremeItems) {
+    for (const item of mergedItems) {
       // Clean up item names (sometimes the scraper catches extra text like 'Traveler\\'s Gun')
       item.name = item.name.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '');
       
       if (item.name.length < 3 || item.supremeValue <= 0) continue;
 
       // Simulated Starpets scrape (approx $0.0035 per value)
-      let spPrice = parseFloat((item.supremeValue * 0.0035).toFixed(2));
-      if (spPrice < 0.5) spPrice = 0.5;
-      item.starpetsPrice = spPrice;
+      // Removed because it is now handled by the scrapeStarpets function
       
       item.image = generatePlaceholder(item.name.substring(0,3).toUpperCase(), '#1f2937', '#111827');
       
