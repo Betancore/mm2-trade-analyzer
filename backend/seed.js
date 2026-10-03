@@ -86,27 +86,38 @@ const MOCK_ITEMS = [
 console.log("Seeding database...");
 let count = 0;
 
-for (const item of MOCK_ITEMS) {
-  const image = generatePlaceholder(item.name.substring(0,3).toUpperCase(), '#1f2937', '#111827');
-  
-  db.run(
-    `INSERT INTO items (name, category, supremeValue, starpetsPrice, image, lastUpdated) 
-     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-     ON CONFLICT(name) DO UPDATE SET 
-       supremeValue = excluded.supremeValue,
-       starpetsPrice = excluded.starpetsPrice,
-       lastUpdated = CURRENT_TIMESTAMP`,
-    [item.name, item.category, item.supremeValue, item.starpetsPrice, image],
-    function(err) {
-      if (err) {
-        console.error("Error inserting", item.name, err.message);
-      } else {
-        count++;
-        if (count === MOCK_ITEMS.length) {
-          console.log(`Successfully seeded ${count} items into SQLite database.`);
-          db.close();
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE,
+    category TEXT,
+    supremeValue INTEGER,
+    starpetsPrice REAL,
+    image TEXT,
+    lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  for (const item of MOCK_ITEMS) {
+    const image = generatePlaceholder(item.name.substring(0,3).toUpperCase(), '#1f2937', '#111827');
+    
+    db.run(
+      `INSERT INTO items (name, category, supremeValue, starpetsPrice, image, lastUpdated) 
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(name) DO UPDATE SET 
+         supremeValue = excluded.supremeValue,
+         starpetsPrice = excluded.starpetsPrice,
+         lastUpdated = CURRENT_TIMESTAMP`,
+      [item.name, item.category, item.supremeValue, item.starpetsPrice, image],
+      function(err) {
+        if (err) {
+          console.error("Error inserting", item.name, err.message);
+        } else {
+          count++;
+          if (count === MOCK_ITEMS.length) {
+            console.log(`Successfully seeded ${count} items into SQLite database.`);
+          }
         }
       }
-    }
-  );
-}
+    );
+  }
+});
