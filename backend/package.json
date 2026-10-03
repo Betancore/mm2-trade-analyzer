@@ -4,6 +4,7 @@
   "description": "Backend for MM2 Trade Calculator",
   "main": "server.js",
   "scripts": {
+    "prestart": "node seed.js",
     "start": "node server.js",
     "dev": "nodemon server.js",
     "scrape": "node scraper.js",
