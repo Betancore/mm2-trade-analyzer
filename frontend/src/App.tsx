@@ -90,12 +90,12 @@ export default function App() {
       // Update offers with exact live prices
       setMyOffer(prev => prev.map(item => ({
         ...item,
-        starpetsPrice: livePrices[item.name] !== null ? livePrices[item.name] : item.starpetsPrice
+        starpetsPrice: livePrices[item.name] ?? item.starpetsPrice
       })));
       
       setTheirOffer(prev => prev.map(item => ({
         ...item,
-        starpetsPrice: livePrices[item.name] !== null ? livePrices[item.name] : item.starpetsPrice
+        starpetsPrice: livePrices[item.name] ?? item.starpetsPrice
       })));
       
     } catch (error) {
