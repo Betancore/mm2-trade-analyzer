@@ -170,7 +170,7 @@ export default function App() {
                           <span className="text-emerald-400 font-medium">${item.starpetsPrice.toFixed(2)}</span>
                         </div>
                       </div>
-                      <div className="flex flex-col sm:flex-row gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      <div className="flex flex-col sm:flex-row gap-2 transition-opacity">
                         <button 
                           onClick={() => addItem(item, 'my')}
                           className="px-3 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-500/30 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1"
