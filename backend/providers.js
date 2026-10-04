@@ -2,7 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 const STARPETS_API = 'https://mm2-market.apineural.com/api/v2/store/items/all';
-const SUPREME_BASE = 'https://supremevalues.com/mm2';
+const SUPREME_BASE = 'https://www.supremevalues.com/mm2';
 const STARPETS_TYPES = [{ type: 'weapon' }, { type: 'pet' }, { type: 'misc' }];
 const CATEGORY_BY_RARITY = {
   ancient: 'ancients',
@@ -20,6 +20,7 @@ class ProviderError extends Error {
     super(publicMessage);
     this.publicMessage = publicMessage;
     this.code = options.code || 'UPSTREAM_UNAVAILABLE';
+    this.sourceUrl = options.sourceUrl;
   }
 }
 
@@ -54,7 +55,10 @@ async function queryStarpets(name) {
       }
     });
   } catch (error) {
-    throw new ProviderError('StarPets live market data could not be reached.', { code: 'STARPETS_UNAVAILABLE' });
+    throw new ProviderError('StarPets live market data could not be reached.', {
+      code: 'STARPETS_UNAVAILABLE',
+      sourceUrl: 'https://starpets.gg/mm2'
+    });
   }
 
   const data = response.data;
@@ -163,11 +167,17 @@ async function fetchLiveSupremeValue(item) {
     const blocked = error.response?.status === 403 || error.response?.status === 503;
     throw new ProviderError(
       blocked ? 'Supreme Values is blocking automated requests from the API host.' : 'Supreme Values could not be reached.',
-      { code: blocked ? 'SUPREME_BLOCKED' : 'SUPREME_UNAVAILABLE' }
+      { code: blocked ? 'SUPREME_BLOCKED' : 'SUPREME_UNAVAILABLE', sourceUrl }
     );
   }
 
-  const value = parseSupremeValue(response.data, item.name);
+  let value;
+  try {
+    value = parseSupremeValue(response.data, item.name);
+  } catch (error) {
+    error.sourceUrl = sourceUrl;
+    throw error;
+  }
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new ProviderError(`Supreme Values returned an invalid value for ${item.name}.`, { code: 'SUPREME_INVALID_VALUE' });
   }

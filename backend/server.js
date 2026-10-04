@@ -55,7 +55,11 @@ app.post('/api/calculate', async (req, res) => {
       starpets = await fetchLiveStarpetsItem(item);
       supreme = await fetchLiveSupremeValue(starpets.marketItem);
     } catch (error) {
-      const failure = { status: 'unavailable', error: error.publicMessage || 'Could not fetch a live source result.' };
+      const failure = {
+        status: 'unavailable',
+        error: error.publicMessage || 'Could not fetch a live source result.',
+        sourceUrl: error.sourceUrl
+      };
       if (!starpets) {
         starpets = failure;
         supreme = { status: 'unavailable', error: 'Supreme Values category could not be matched without the live StarPets item.' };
