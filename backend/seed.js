@@ -103,7 +103,11 @@ db.serialize(() => {
     db.run(
       `INSERT INTO items (name, category, supremeValue, starpetsPrice, image, lastUpdated) 
        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(name) DO NOTHING`,
+       ON CONFLICT(name) DO UPDATE SET 
+         supremeValue = excluded.supremeValue,
+         starpetsPrice = excluded.starpetsPrice,
+         image = excluded.image,
+         lastUpdated = CURRENT_TIMESTAMP`,
       [item.name, item.category, item.supremeValue, item.starpetsPrice, image],
       function(err) {
         if (err) {
