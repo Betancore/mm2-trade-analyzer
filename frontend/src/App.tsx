@@ -85,17 +85,19 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: itemNames })
       });
-      const livePrices = await response.json();
+      const liveData = await response.json();
       
-      // Update offers with exact live prices
+      // Update offers with exact live prices and correct supreme values
       setMyOffer(prev => prev.map(item => ({
         ...item,
-        starpetsPrice: livePrices[item.name] ?? item.starpetsPrice
+        starpetsPrice: liveData[item.name]?.starpetsPrice ?? item.starpetsPrice,
+        supremeValue: liveData[item.name]?.supremeValue ?? item.supremeValue
       })));
       
       setTheirOffer(prev => prev.map(item => ({
         ...item,
-        starpetsPrice: livePrices[item.name] ?? item.starpetsPrice
+        starpetsPrice: liveData[item.name]?.starpetsPrice ?? item.starpetsPrice,
+        supremeValue: liveData[item.name]?.supremeValue ?? item.supremeValue
       })));
       
     } catch (error) {

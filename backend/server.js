@@ -54,7 +54,24 @@ app.post('/api/calculate', async (req, res) => {
       }
     }
     
-    res.json(livePrices);
+    // Fetch the updated items from DB to get the most accurate supremeValue
+    const placeholders = uniqueItems.map(() => '?').join(',');
+    db.all(`SELECT * FROM items WHERE name IN (${placeholders})`, uniqueItems, (err, rows) => {
+      if (err) {
+        return res.status(500).json({ error: 'Failed to fetch updated item data' });
+      }
+      
+      const result = {};
+      for (const row of rows) {
+        result[row.name] = {
+          starpetsPrice: livePrices[row.name] ?? row.starpetsPrice,
+          supremeValue: row.supremeValue
+        };
+      }
+      
+      res.json(result);
+    });
+    
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to calculate live prices' });
