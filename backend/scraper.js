@@ -223,21 +223,19 @@ async function fetchLivePrices(itemNames) {
       await new Promise(r => setTimeout(r, 2500)); // Wait for search results to render
       
       // Extract price from the first item card
-      const price = await page.evaluate((searchName) => {
-        // Find all links that point to a shop item
-        const cards = Array.from(document.querySelectorAll('a[href*="/shop/"]'));
-        if (cards.length === 0) return null;
-        
-        for (const card of cards) {
-          const text = card.innerText;
-          // Verify the card actually contains the name we searched for (case-insensitive)
-          // Some short names might match sub-strings, so we do a basic check
-          if (text.toLowerCase().includes(searchName.toLowerCase())) {
-            const match = text.match(/([0-9.,]+)\s*[$€]/);
-            if (match) {
-              let p = parseFloat(match[1].replace(',', '.'));
-              if (text.includes('€')) p = p * 1.08; // Rough EUR to USD conversion
-              return parseFloat(p.toFixed(2));
+      const price = await page.evaluate(function(searchName) {
+        const cards = Array.from(document.querySelectorAll('a'));
+        for (let i=0; i<cards.length; i++) {
+          const card = cards[i];
+          if (card.href && card.href.indexOf('/shop/') !== -1) {
+            const text = card.innerText;
+            if (text.toLowerCase().indexOf(searchName.toLowerCase()) !== -1) {
+              const match = text.match(/([0-9.,]+)\s*[$€]/);
+              if (match) {
+                let p = parseFloat(match[1].replace(',', '.'));
+                if (text.indexOf('€') !== -1) p = p * 1.08;
+                return parseFloat(p.toFixed(2));
+              }
             }
           }
         }
