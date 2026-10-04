@@ -1,8 +1,5 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
-
 const STARPETS_API = 'https://mm2-market.apineural.com/api/v2/store/items/all';
-const SUPREME_BASE = 'https://www.supremevalues.com/mm2';
 const STARPETS_TYPES = [{ type: 'weapon' }, { type: 'pet' }, { type: 'misc' }];
 const CATEGORY_BY_RARITY = {
   ancient: 'ancients',
@@ -106,15 +103,6 @@ function getSupremeCategory(item) {
   return CATEGORY_BY_RARITY[String(item.rare || '').toLowerCase()] || null;
 }
 
-function toSupremeSlug(name) {
-  return name
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/['’]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
-
 function toStarpetsSlug(name) {
   return name
     .normalize('NFKD')
@@ -125,69 +113,12 @@ function toStarpetsSlug(name) {
     .replace(/^_+|_+$/g, '');
 }
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function parseSupremeValue(html, itemName) {
-  const text = cheerio.load(html)('body').text().replace(/\s+/g, ' ').trim();
-  if (/just a moment|attention required|cf-chl-|cloudflare/i.test(text.slice(0, 1500))) {
-    throw new ProviderError('Supreme Values is blocking automated requests from the API host.', { code: 'SUPREME_BLOCKED' });
-  }
-
-  const name = escapeRegExp(itemName);
-  const sentence = new RegExp(`${name}\\s+is\\s+an?\\s+MM2\\s+[^.]{0,300}?\\s+with\\s+a\\s+value\\s+of\\s+([\\d,]+)\\b`, 'i');
-  const sentenceMatch = text.match(sentence);
-  if (sentenceMatch) return Number(sentenceMatch[1].replace(/,/g, ''));
-
-  const card = new RegExp(`${name}\\s+Value\\s*-\\s*([\\d,]+)\\b`, 'i');
-  const cardMatch = text.match(card);
-  if (cardMatch) return Number(cardMatch[1].replace(/,/g, ''));
-
-  throw new ProviderError(`Supreme Values did not return a value for ${itemName}.`, { code: 'SUPREME_ITEM_NOT_FOUND' });
-}
-
-async function fetchLiveSupremeValue(item) {
+function supremePermissionStatus(item) {
   const category = getSupremeCategory(item);
-  if (!category) {
-    throw new ProviderError('This listing does not identify a Supreme Values category.', { code: 'SUPREME_CATEGORY_UNKNOWN' });
-  }
-
-  const sourceUrl = `${SUPREME_BASE}/${category}?item=${encodeURIComponent(toSupremeSlug(item.name))}`;
-  let response;
-  try {
-    response = await axios.get(sourceUrl, {
-      timeout: 12000,
-      headers: {
-        Accept: 'text/html,application/xhtml+xml',
-        'User-Agent': 'MM2TradeAnalyzer/1.0'
-      }
-    });
-  } catch (error) {
-    const blocked = error.response?.status === 403 || error.response?.status === 503;
-    throw new ProviderError(
-      blocked ? 'Supreme Values is blocking automated requests from the API host.' : 'Supreme Values could not be reached.',
-      { code: blocked ? 'SUPREME_BLOCKED' : 'SUPREME_UNAVAILABLE', sourceUrl }
-    );
-  }
-
-  let value;
-  try {
-    value = parseSupremeValue(response.data, item.name);
-  } catch (error) {
-    error.sourceUrl = sourceUrl;
-    throw error;
-  }
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new ProviderError(`Supreme Values returned an invalid value for ${item.name}.`, { code: 'SUPREME_INVALID_VALUE' });
-  }
-
   return {
-    status: 'ok',
-    value,
-    source: 'Supreme Values',
-    sourceUrl,
-    observedAt: new Date().toISOString()
+    status: 'permission_required',
+    error: 'Supreme Values prohibits reusing its value-list data in third-party apps without authorization. An official API or written permission is required.',
+    sourceUrl: category ? `https://supremevalues.com/mm2/${category}` : 'https://supremevalues.com/'
   };
 }
 
@@ -213,10 +144,8 @@ module.exports = {
   ProviderError,
   fetchStarpetsSearch,
   fetchLiveStarpetsItem,
-  fetchLiveSupremeValue,
   getSupremeCategory,
-  parseSupremeValue,
+  supremePermissionStatus,
   runWithConcurrency,
-  toSupremeSlug,
   toStarpetsSlug
 };

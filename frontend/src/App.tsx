@@ -13,7 +13,7 @@ interface CatalogItem {
 }
 
 interface SourceResult<T> {
-  status: 'pending' | 'ok' | 'unavailable';
+  status: 'pending' | 'ok' | 'unavailable' | 'permission_required';
   error?: string;
   source?: string;
   sourceUrl?: string;
@@ -182,6 +182,7 @@ export default function App() {
   const hasTrade = myOffer.length + theirOffer.length > 0;
   const sourceLabel = (source: SourceResult<number>, formatter: (value: number) => string) => {
     if (source.status === 'pending') return 'Not calculated';
+    if (source.status === 'permission_required') return 'Authorization required';
     if (source.status !== 'ok' || typeof source.value !== 'number' && typeof source.price !== 'number') return 'Unavailable';
     const value = source.value ?? source.price;
     return typeof value === 'number' && Number.isFinite(value) ? formatter(value) : 'Unavailable';
@@ -234,7 +235,7 @@ export default function App() {
             <ArrowRightLeft className="text-amber-400 w-8 h-8 mr-3" />
             <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-500 to-red-500">MM2 Trade Analyzer</h1>
           </div>
-          <p className="text-slate-400">On-demand values from Supreme Values and current USD listings from StarPets.</p>
+          <p className="text-slate-400">Current USD listings from StarPets. Supreme Values integration is pending data authorization.</p>
         </header>
 
         <div className="relative w-full max-w-2xl mx-auto mb-8 z-50" ref={searchRef}>

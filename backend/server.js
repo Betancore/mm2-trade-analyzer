@@ -3,7 +3,7 @@ const cors = require('cors');
 const {
   fetchStarpetsSearch,
   fetchLiveStarpetsItem,
-  fetchLiveSupremeValue,
+  supremePermissionStatus,
   runWithConcurrency
 } = require('./providers');
 
@@ -53,7 +53,7 @@ app.post('/api/calculate', async (req, res) => {
     let supreme;
     try {
       starpets = await fetchLiveStarpetsItem(item);
-      supreme = await fetchLiveSupremeValue(starpets.marketItem);
+      supreme = supremePermissionStatus(starpets.marketItem);
     } catch (error) {
       const failure = {
         status: 'unavailable',
@@ -62,7 +62,7 @@ app.post('/api/calculate', async (req, res) => {
       };
       if (!starpets) {
         starpets = failure;
-        supreme = { status: 'unavailable', error: 'Supreme Values category could not be matched without the live StarPets item.' };
+        supreme = supremePermissionStatus({ rare: '', chroma: false });
       } else {
         supreme = failure;
       }
