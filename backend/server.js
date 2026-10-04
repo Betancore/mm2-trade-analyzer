@@ -1,91 +1,88 @@
 const express = require('express');
 const cors = require('cors');
-const cron = require('node-cron');
-const db = require('./database'); // This initializes the DB
-const { runScraper, fetchLivePrices } = require('./scraper');
+const {
+  fetchStarpetsSearch,
+  fetchLiveStarpetsItem,
+  fetchLiveSupremeValue,
+  runWithConcurrency
+} = require('./providers');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '32kb' }));
 
-// API endpoint to fetch items
-app.get('/api/items', (req, res) => {
-  const { query } = req.query;
-  
-  let sql = 'SELECT * FROM items';
-  let params = [];
-  
-  if (query) {
-    sql += ' WHERE name LIKE ?';
-    params.push(`%${query}%`);
-  }
-  
-  // Sort by highest supreme value by default
-  sql += ' ORDER BY supremeValue DESC LIMIT 50';
-  
-  db.all(sql, params, (err, rows) => {
-    if (err) {
-      console.error(err.message);
-      res.status(500).json({ error: 'Failed to fetch items from database' });
-      return;
-    }
-    res.json(rows);
-  });
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok' });
 });
 
-// API endpoint to calculate live prices on demand
-app.post('/api/calculate', async (req, res) => {
-  const { items } = req.body;
-  if (!items || !Array.isArray(items)) {
-    return res.status(400).json({ error: 'Items array is required' });
+app.get('/api/items', async (req, res) => {
+  const query = typeof req.query.query === 'string' ? req.query.query.trim() : '';
+  if (!query || query.length > 80) {
+    return res.status(400).json({ error: 'Enter an item name (up to 80 characters).' });
   }
-  
+
   try {
-    // Remove duplicates
-    const uniqueItems = [...new Set(items)];
-    const livePrices = await fetchLivePrices(uniqueItems);
-    
-    // Asynchronously update the database with these new exact prices in the background
-    for (const [name, price] of Object.entries(livePrices)) {
-      if (price) {
-        db.run('UPDATE items SET starpetsPrice = ?, lastUpdated = CURRENT_TIMESTAMP WHERE name = ?', [price, name]);
-      }
-    }
-    
-    // Fetch the updated items from DB to get the most accurate supremeValue
-    const placeholders = uniqueItems.map(() => '?').join(',');
-    db.all(`SELECT * FROM items WHERE name IN (${placeholders})`, uniqueItems, (err, rows) => {
-      if (err) {
-        return res.status(500).json({ error: 'Failed to fetch updated item data' });
-      }
-      
-      const result = {};
-      for (const row of rows) {
-        result[row.name] = {
-          starpetsPrice: livePrices[row.name] ?? row.starpetsPrice,
-          supremeValue: row.supremeValue
-        };
-      }
-      
-      res.json(result);
-    });
-    
+    const items = await fetchStarpetsSearch(query);
+    res.set('Cache-Control', 'no-store');
+    res.json(items);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to calculate live prices' });
+    console.error('StarPets search failed:', error.message);
+    res.status(502).json({ error: error.publicMessage || 'StarPets search is unavailable right now.' });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  
-  // Schedule the scraper to run automatically every hour
-  cron.schedule('0 * * * *', () => {
-    console.log('Running scheduled scraper...');
-    runScraper().catch(console.error);
+app.post('/api/calculate', async (req, res) => {
+  const requestedItems = req.body?.items;
+  if (!Array.isArray(requestedItems) || requestedItems.length === 0 || requestedItems.length > 20) {
+    return res.status(400).json({ error: 'Provide between 1 and 20 trade items.' });
+  }
+
+  const items = requestedItems.map(item => ({
+    id: String(item?.id ?? ''),
+    name: typeof item?.name === 'string' ? item.name.trim() : ''
+  }));
+  if (items.some(item => !item.id || !item.name || item.name.length > 100)) {
+    return res.status(400).json({ error: 'Each item needs its StarPets item ID and name.' });
+  }
+
+  const uniqueItems = [...new Map(items.map(item => [item.id, item])).values()];
+  const results = await runWithConcurrency(uniqueItems, 4, async item => {
+    let starpets;
+    let supreme;
+    try {
+      starpets = await fetchLiveStarpetsItem(item);
+      supreme = await fetchLiveSupremeValue(starpets.marketItem);
+    } catch (error) {
+      const failure = { status: 'unavailable', error: error.publicMessage || 'Could not fetch a live source result.' };
+      if (!starpets) {
+        starpets = failure;
+        supreme = { status: 'unavailable', error: 'Supreme Values category could not be matched without the live StarPets item.' };
+      } else {
+        supreme = failure;
+      }
+    }
+
+    if (starpets.marketItem) {
+      const { marketItem: _marketItem, ...publicStarpets } = starpets;
+      starpets = publicStarpets;
+    }
+
+    return {
+      id: item.id,
+      name: item.name,
+      starpets,
+      supreme
+    };
   });
-  
-  console.log('Scraper scheduled to run every hour at minute 0.');
+
+  res.set('Cache-Control', 'no-store');
+  res.json({ fetchedAt: new Date().toISOString(), items: results });
 });
+
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`MM2 trade API listening on port ${PORT}`));
+}
+
+module.exports = app;

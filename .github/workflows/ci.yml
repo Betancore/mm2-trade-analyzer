@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: [ "master" ]
 
 jobs:
   build-and-test:
@@ -28,3 +28,6 @@ jobs:
 
     - name: Install Backend Dependencies
       run: cd backend && npm ci
+
+    - name: Test Backend
+      run: cd backend && npm test
