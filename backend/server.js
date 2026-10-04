@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const cron = require('node-cron');
 const db = require('./database'); // This initializes the DB
-const { runScraper } = require('./scraper');
+const { runScraper, fetchLivePrices } = require('./scraper');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -33,6 +33,32 @@ app.get('/api/items', (req, res) => {
     }
     res.json(rows);
   });
+});
+
+// API endpoint to calculate live prices on demand
+app.post('/api/calculate', async (req, res) => {
+  const { items } = req.body;
+  if (!items || !Array.isArray(items)) {
+    return res.status(400).json({ error: 'Items array is required' });
+  }
+  
+  try {
+    // Remove duplicates
+    const uniqueItems = [...new Set(items)];
+    const livePrices = await fetchLivePrices(uniqueItems);
+    
+    // Asynchronously update the database with these new exact prices in the background
+    for (const [name, price] of Object.entries(livePrices)) {
+      if (price) {
+        db.run('UPDATE items SET starpetsPrice = ?, lastUpdated = CURRENT_TIMESTAMP WHERE name = ?', [price, name]);
+      }
+    }
+    
+    res.json(livePrices);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to calculate live prices' });
+  }
 });
 
 app.listen(PORT, () => {

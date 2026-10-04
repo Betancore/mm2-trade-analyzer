@@ -194,4 +194,66 @@ if (require.main === module) {
   runScraper();
 }
 
-module.exports = { runScraper };
+async function fetchLivePrices(itemNames) {
+  console.log(`Fetching live prices for: ${itemNames.join(', ')}`);
+  const browser = await puppeteer.launch({ 
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+  });
+  
+  const results = {};
+  
+  try {
+    const page = await browser.newPage();
+    await page.goto('https://starpets.gg/mm2', { waitUntil: 'networkidle2' });
+    await new Promise(r => setTimeout(r, 4000)); // Wait for Cloudflare and React to load
+    
+    for (const name of itemNames) {
+      console.log(`Searching for ${name}...`);
+      
+      // Clear input and type new search
+      await page.evaluate((searchName) => {
+        const input = document.querySelector('input[placeholder*="Search" i], input[type="text"]');
+        if (input) {
+          input.value = searchName;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }, name);
+      
+      await new Promise(r => setTimeout(r, 2500)); // Wait for search results to render
+      
+      // Extract price from the first item card
+      const price = await page.evaluate((searchName) => {
+        // Find all links that point to a shop item
+        const cards = Array.from(document.querySelectorAll('a[href*="/shop/"]'));
+        if (cards.length === 0) return null;
+        
+        for (const card of cards) {
+          const text = card.innerText;
+          // Verify the card actually contains the name we searched for (case-insensitive)
+          // Some short names might match sub-strings, so we do a basic check
+          if (text.toLowerCase().includes(searchName.toLowerCase())) {
+            const match = text.match(/([0-9.,]+)\s*[$€]/);
+            if (match) {
+              let p = parseFloat(match[1].replace(',', '.'));
+              if (text.includes('€')) p = p * 1.08; // Rough EUR to USD conversion
+              return parseFloat(p.toFixed(2));
+            }
+          }
+        }
+        return null;
+      }, name);
+      
+      results[name] = price;
+      console.log(`Result for ${name}: ${price ? '$' + price : 'Not found'}`);
+    }
+  } catch (err) {
+    console.error("Live price fetch error:", err);
+  } finally {
+    await browser.close();
+  }
+  
+  return results;
+}
+
+module.exports = { runScraper, fetchLivePrices };

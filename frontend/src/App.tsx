@@ -16,6 +16,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Item[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
   
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -67,6 +68,41 @@ export default function App() {
     } else {
       setTheirOffer(theirOffer.filter(item => item.id !== id));
     }
+  };
+
+  const calculateLivePrices = async () => {
+    setIsCalculating(true);
+    const itemNames = [...new Set([...myOffer, ...theirOffer].map(i => i.name))];
+    
+    if (itemNames.length === 0) {
+      setIsCalculating(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('https://mm2-trade-analyzer.onrender.com/api/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemNames })
+      });
+      const livePrices = await response.json();
+      
+      // Update offers with exact live prices
+      setMyOffer(prev => prev.map(item => ({
+        ...item,
+        starpetsPrice: livePrices[item.name] !== null ? livePrices[item.name] : item.starpetsPrice
+      })));
+      
+      setTheirOffer(prev => prev.map(item => ({
+        ...item,
+        starpetsPrice: livePrices[item.name] !== null ? livePrices[item.name] : item.starpetsPrice
+      })));
+      
+    } catch (error) {
+      console.error("Failed to fetch live prices:", error);
+    }
+    
+    setIsCalculating(false);
   };
 
   const calculateTotal = (offer: Item[]) => {
@@ -249,6 +285,39 @@ export default function App() {
 
         </div>
         
+        {/* LIVE CALCULATION BUTTON */}
+        <div className="mt-8 flex justify-center z-10 relative">
+          <button 
+            onClick={calculateLivePrices}
+            disabled={isCalculating || (myOffer.length === 0 && theirOffer.length === 0)}
+            className={`
+              relative group overflow-hidden px-8 py-4 rounded-2xl font-black text-xl tracking-wide transition-all duration-300
+              ${isCalculating 
+                ? 'bg-slate-800 text-slate-400 cursor-wait' 
+                : (myOffer.length === 0 && theirOffer.length === 0)
+                  ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed border border-slate-700'
+                  : 'bg-brand-500 text-slate-950 hover:scale-105 hover:shadow-[0_0_40px_rgba(245,158,11,0.4)] hover:text-white'
+              }
+            `}
+          >
+            {isCalculating ? (
+              <span className="flex items-center gap-3">
+                <div className="w-5 h-5 border-4 border-slate-600 border-t-slate-400 rounded-full animate-spin"></div>
+                Fetching Live Market Data...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2 relative z-10">
+                Calculate Exact Live Prices
+              </span>
+            )}
+            
+            {/* Hover flare effect */}
+            {!isCalculating && (myOffer.length > 0 || theirOffer.length > 0) && (
+              <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent group-hover:animate-[shimmer_1.5s_infinite]"></div>
+            )}
+          </button>
+        </div>
+
         {/* ANALYSIS FOOTER */}
         <div className="mt-8 bg-gradient-to-b from-slate-800 to-slate-900 rounded-3xl p-8 border border-slate-700 shadow-2xl relative overflow-hidden">
            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-red-500"></div>
