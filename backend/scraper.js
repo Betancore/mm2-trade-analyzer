@@ -117,7 +117,7 @@ async function scrapeStarpets(browser, supremeItems) {
     } else {
       // Fallback if not found on the page we scrolled
       // Some items are very rare or out of stock and won't appear easily
-      let estimated = parseFloat((item.supremeValue * 0.0035).toFixed(2));
+      let estimated = parseFloat((item.supremeValue * 0.036).toFixed(2));
       item.starpetsPrice = estimated < 0.5 ? 0.5 : estimated; 
     }
   }
